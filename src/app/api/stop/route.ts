@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const BUDGETS = ["club", "theatre", "arena"];
+const BUDGETS = ["auto", "club", "theatre", "arena"];
 
 /** Build one more stop for an existing plan ("Add to tour"). */
 export async function GET(req: Request) {
@@ -14,7 +14,7 @@ export async function GET(req: Request) {
   const artist = (q.get("artist") ?? "").trim().slice(0, 80);
   const city = (q.get("city") ?? "").trim().slice(0, 60);
   const demand = Math.min(99, Math.max(0, Number(q.get("demand")) || 70));
-  const budget = (BUDGETS.includes(q.get("budget") ?? "") ? q.get("budget") : "arena") as PlanOptions["budget"];
+  const budget = (BUDGETS.includes(q.get("budget") ?? "") ? q.get("budget") : "auto") as PlanOptions["budget"];
 
   if (!artist || !city) return Response.json({ error: "Missing artist or city" }, { status: 400 });
   if (!qlooConfigured()) return Response.json({ error: "Qloo is not configured" }, { status: 503 });

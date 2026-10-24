@@ -6,6 +6,8 @@
 const TTL_MS = 6 * 60 * 60 * 1000;
 const cache = new Map<string, { t: number; p: Promise<unknown> }>();
 
+import type { SubjectKind } from "./types";
+
 export type QlooTag = { name: string; tag_id?: string; type?: string };
 export type QlooEntity = {
   entity_id: string;
@@ -62,48 +64,76 @@ export async function qloo<T>(path: string, params: Record<string, string | numb
 
 // ---------- Tools used by the agent ----------
 
+export type SubjectType = "urn:entity:artist" | "urn:entity:person" | "urn:entity:brand" | "urn:entity:podcast";
+
 export type Subject = {
   id: string;
   name: string;
-  type: "urn:entity:artist" | "urn:entity:person";
+  type: SubjectType;
+  kind: SubjectKind;
+  popularity: number;
   tags: QlooTag[];
   description: string;
   image: string | null;
   lastfm: { listeners?: number; scrobbles?: number } | null;
 };
 
-/** Turn a name into a Qloo entity. Tries artists first, then people (comedians, speakers). */
+const SEARCH_TYPES: { type: SubjectType; bias: number }[] = [
+  { type: "urn:entity:artist", bias: 0.6 },
+  { type: "urn:entity:person", bias: 0.6 },
+  { type: "urn:entity:podcast", bias: 0.2 },
+  { type: "urn:entity:brand", bias: 0 },
+];
+
+const SPORT = /soccer|football|baseball|basketball|hockey|cricket|rugby|sports? team|premier league|nfl|nba|mlb|nhl|la liga|serie a|bundesliga|club/i;
+
+// A sports club can also be filed as an artist in Qloo, so read the description too.
+const CLUB = /\b(football|soccer|baseball|basketball|hockey|cricket|rugby)\b[^.]*\b(club|team|franchise)\b|\b(club|team|franchise)\b[^.]*\b(football|soccer|baseball|basketball|hockey|cricket|rugby)\b|professional sports?/i;
+
+function kindOf(type: SubjectType, tags: QlooTag[], description: string): SubjectKind {
+  if (type === "urn:entity:podcast") return "podcast";
+  if (CLUB.test(description)) return "team";
+  if (type === "urn:entity:brand") return SPORT.test(`${description} ${tags.map((t) => t.name).join(" ")}`) ? "team" : "brand";
+  return "act";
+}
+
+/**
+ * Turn a name into a Qloo entity. Searches artists, people (comedians, actors), podcasts and brands
+ * (which includes sports clubs). An exact name match wins, then popularity, with acts preferred on a tie.
+ */
 export async function findSubject(name: string): Promise<Subject | null> {
-  const types = ["urn:entity:artist", "urn:entity:person"] as const;
   const results = await Promise.all(
-    types.map((t) =>
-      qloo<{ results?: (QlooEntity & { types?: string[] })[] }>("/search", { query: name, types: t, take: 3 })
+    SEARCH_TYPES.map(({ type }) =>
+      qloo<{ results?: QlooEntity[] }>("/search", { query: name, types: type, take: 3 })
         .then((r) => (r.results ?? [])[0])
         .catch(() => undefined),
     ),
   );
   const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
-  let best: { e: QlooEntity; type: Subject["type"] } | null = null;
+  const nq = norm(name);
+  let best: { e: QlooEntity; type: SubjectType; score: number } | null = null;
   results.forEach((e, i) => {
     if (!e) return;
-    const exact = norm(e.name) === norm(name);
-    const score = (exact ? 10 : 0) + (e.popularity ?? 0);
-    const bestScore = best ? (norm(best.e.name) === norm(name) ? 10 : 0) + (best.e.popularity ?? 0) : -1;
-    if (score > bestScore) best = { e, type: types[i] };
+    const n = norm(e.name);
+    const score = (n === nq ? 10 : n.startsWith(nq) ? 1 : 0) + (e.popularity ?? 0) + SEARCH_TYPES[i].bias;
+    if (!best || score > best.score) best = { e, type: SEARCH_TYPES[i].type, score };
   });
   if (!best) return null;
-  const b = best as { e: QlooEntity; type: Subject["type"] };
+  const b = best as { e: QlooEntity; type: SubjectType; score: number };
+  const tags = b.e.tags ?? [];
+  const description = b.e.properties?.short_description ?? "";
   return {
     id: b.e.entity_id,
     name: b.e.name,
     type: b.type,
-    tags: b.e.tags ?? [],
-    description: b.e.properties?.short_description ?? "",
+    kind: kindOf(b.type, tags, description),
+    popularity: b.e.popularity ?? 0,
+    tags,
+    description,
     image: b.e.properties?.image?.url ?? null,
     lastfm: b.e.properties?.external?.lastfm ?? null,
   };
 }
-
 type InsightsResponse = { results?: { entities?: QlooEntity[]; heatmap?: HeatCell[] } };
 export type HeatCell = { location: { latitude: number; longitude: number }; query?: { affinity?: number } };
 
@@ -219,3 +249,5 @@ export async function heatCells(subjectId: string, lat: number, lng: number, tak
     weight: c.query?.affinity ?? 0.5,
   }));
 }
+
+

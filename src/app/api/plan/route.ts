@@ -9,7 +9,7 @@ export const maxDuration = 60;
 
 const STOPS = [5, 10, 20];
 const REGIONS = ["world", "north-america", "latin-america", "europe", "africa", "middle-east", "asia", "oceania"];
-const BUDGETS = ["club", "theatre", "arena"];
+const BUDGETS = ["auto", "club", "theatre", "arena"];
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -18,7 +18,7 @@ export async function GET(req: Request) {
   const artist = (q.get("artist") ?? "").trim().slice(0, 80);
   const stops = Number(q.get("stops"));
   const region = q.get("region") ?? "world";
-  const budget = q.get("budget") ?? "arena";
+  const budget = q.get("budget") ?? "auto";
   const fresh = q.get("fresh") === "1";
 
   if (!artist) return Response.json({ error: "Missing artist" }, { status: 400 });
@@ -26,7 +26,7 @@ export async function GET(req: Request) {
   const opts: PlanOptions = {
     stops: (STOPS.includes(stops) ? stops : 10) as PlanOptions["stops"],
     region: (REGIONS.includes(region) ? region : "world") as PlanOptions["region"],
-    budget: (BUDGETS.includes(budget) ? budget : "arena") as PlanOptions["budget"],
+    budget: (BUDGETS.includes(budget) ? budget : "auto") as PlanOptions["budget"],
   };
   const key = planKey(artist, opts);
   const cached = fresh ? null : await getPlan(key);

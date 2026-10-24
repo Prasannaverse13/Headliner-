@@ -65,8 +65,17 @@ const GENERIC: Omit<ArtistSeed, "name"> = {
   ],
 };
 
-/** The demo acts. These are pre-warmed so they load instantly. See scripts/warm.mjs. */
-export const SUGGESTIONS = ["Coldplay", "Kendrick Lamar", "Dave Chappelle", "Bad Bunny", "Arijit Singh"];
+/**
+ * The demo subjects, grouped by what they are. They are pre-warmed so they load instantly (see scripts/warm.mjs).
+ * Headliner plans for anything Qloo knows: musicians, comedians, sports clubs and podcasts.
+ */
+export const SUGGESTION_GROUPS: { label: string; items: string[] }[] = [
+  { label: "Music", items: ["Coldplay", "Kendrick Lamar", "Bad Bunny", "A. R. Rahman", "Anirudh Ravichander", "Arijit Singh"] },
+  { label: "Comedy", items: ["Dave Chappelle", "Cedric the Entertainer"] },
+  { label: "Sports", items: ["Chelsea F.C.", "Los Angeles Dodgers"] },
+  { label: "Podcasts", items: ["This Week in Startups"] },
+];
+export const SUGGESTIONS = SUGGESTION_GROUPS.flatMap((g) => g.items);
 
 function hash(str: string) {
   let h = 2166136261;
@@ -106,7 +115,7 @@ export function buildSamplePlan(artist: string, opts: PlanOptions): Plan & { mar
     picked.push(x);
   }
 
-  const venue = { club: "Club, 800 cap", theatre: "Theatre, 3,000 cap", arena: "Arena, 15,000 cap" }[opts.budget];
+  const venue = { club: "Club, 800 cap", theatre: "Theatre, 3,000 cap", arena: "Arena, 15,000 cap" }[opts.budget === "auto" ? "arena" : opts.budget];
 
   const stops: Stop[] = picked.map(({ c, score }, i) => {
     const h = hash(seed.name + c.city + i);

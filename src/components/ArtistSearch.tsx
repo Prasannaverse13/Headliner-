@@ -1,8 +1,15 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useId, useRef, useState } from "react";
 
-type Hit = { name: string; type: "artist" | "person"; description: string; image: string | null };
+type Hit = { name: string; type: "artist" | "person" | "podcast" | "brand"; description: string; image: string | null };
+
+const KIND_LABEL: Record<Hit["type"], string> = {
+  artist: "Artist or band",
+  person: "Comedian, actor or public figure",
+  podcast: "Podcast",
+  brand: "Team or brand",
+};
 
 type Props = {
   value: string;
@@ -91,7 +98,7 @@ export default function ArtistSearch({ value, onChange, onSubmit, placeholder = 
           if (value.trim()) onSubmit(value.trim());
         }}
       >
-        <label className="sr-only" htmlFor={`${id}-in`}>Artist, comedian or band</label>
+        <label className="sr-only" htmlFor={`${id}-in`}>Artist, comedian, team or podcast</label>
         <input
           id={`${id}-in`}
           className={`input ${inputClassName}`}
@@ -123,7 +130,7 @@ export default function ArtistSearch({ value, onChange, onSubmit, placeholder = 
                 {h.image ? <img src={h.image} alt="" width={36} height={36} loading="lazy" /> : <span className="combo-ph" />}
                 <span className="combo-t">
                   {h.name}
-                  <small>{h.description || (h.type === "artist" ? "Artist or band" : "Comedian or public figure")}</small>
+                  <small>{h.description || KIND_LABEL[h.type]}</small>
                 </span>
               </button>
             </li>
@@ -133,3 +140,4 @@ export default function ArtistSearch({ value, onChange, onSubmit, placeholder = 
     </div>
   );
 }
+

@@ -5,8 +5,8 @@
 // Cached plans are stored server-side (Upstash Redis if configured, else .cache/plans). Never commit them.
 const base = (process.argv.find((a) => a.startsWith("http")) || "http://localhost:3000").replace(/\/+$/, "");
 const fresh = process.argv.includes("--fresh");
-const ARTISTS = ["Coldplay", "Kendrick Lamar", "Dave Chappelle", "Bad Bunny", "Arijit Singh"];
-const VARIANTS = [{ stops: 10, region: "world", budget: "arena" }];
+const ARTISTS = ["Coldplay", "Kendrick Lamar", "Bad Bunny", "A. R. Rahman", "Anirudh Ravichander", "Arijit Singh", "Dave Chappelle", "Cedric the Entertainer", "Chelsea F.C.", "Los Angeles Dodgers", "This Week in Startups"];
+const VARIANTS = [{ stops: 10, region: "world", budget: "auto" }];
 
 for (const artist of ARTISTS) {
   for (const v of VARIANTS) {

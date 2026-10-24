@@ -1,4 +1,14 @@
-﻿import type { Region } from "./cities";
+import type { Region } from "./cities";
+
+/** What the plan is for. Drives wording: openers for acts, friendly opponents for teams. */
+export type SubjectKind = "act" | "team" | "brand" | "podcast";
+
+export const SUPPORT_ROLE: Record<SubjectKind, string> = {
+  act: "Best opener",
+  team: "Best friendly opponent",
+  brand: "Best co-headline partner",
+  podcast: "Best guest show",
+};
 
 export type Sponsor = { name: string; why: string };
 export type VipPick = { name: string; kind: string };
@@ -75,16 +85,18 @@ export type Plan = {
 export type PlanOptions = {
   stops: 5 | 10 | 20;
   region: "world" | Region;
-  budget: "club" | "theatre" | "arena";
+  /** "auto" picks a size from what the plan is for: arenas for big acts and teams, theatres for comedians and podcasts. */
+  budget: "auto" | "club" | "theatre" | "arena";
 };
 
 export type PlanEvent =
   | { type: "step"; label: string }
-  | { type: "profile"; plan: Pick<Plan, "artist" | "home" | "tags" | "source"> & { cachedAt?: string } }
+  | { type: "profile"; plan: Pick<Plan, "artist" | "home" | "tags" | "source"> & { cachedAt?: string; kind?: SubjectKind } }
   | { type: "about"; about: About }
   | { type: "markets"; markets: Market[] }
   | { type: "stop"; stop: Stop }
   | { type: "stopUpdate"; id: string; patch: Partial<Stop> }
   | { type: "error"; message: string }
   | { type: "done" };
+
 

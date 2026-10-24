@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -10,12 +10,13 @@ import { REGION_LABELS } from "@/lib/cities";
 import { download, safeName, toCsv, toIcs, toJson, type Row } from "@/lib/export";
 import { streamPlan } from "@/lib/planClient";
 import { fmtKm, haversine, orderRoute, schedule, totals, type RouteMode } from "@/lib/route";
-import type { About, Market, Plan, PlanOptions, Stop } from "@/lib/types";
+import { SUPPORT_ROLE, type About, type Market, type Plan, type PlanOptions, type Stop, type SubjectKind } from "@/lib/types";
 
 const GlobeView = dynamic(() => import("@/components/GlobeView"), { ssr: false });
 
 const STOP_OPTS: PlanOptions["stops"][] = [5, 10, 20];
 const BUDGETS: { id: PlanOptions["budget"]; label: string }[] = [
+  { id: "auto", label: "Auto" },
   { id: "club", label: "Club" },
   { id: "theatre", label: "Theatre" },
   { id: "arena", label: "Arena" },
@@ -37,7 +38,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "experience", label: "Experience" },
 ];
 
-type Profile = Pick<Plan, "artist" | "home" | "tags" | "source"> & { cachedAt?: string };
+type Profile = Pick<Plan, "artist" | "home" | "tags" | "source"> & { cachedAt?: string; kind?: SubjectKind };
 
 const parseDay = (iso: string) => {
   const [y, m, d] = iso.split("-").map(Number);
@@ -52,7 +53,7 @@ export default function PlanApp() {
   const params = useSearchParams();
   const artist = params.get("artist")?.trim() || "Coldplay";
 
-  const [opts, setOpts] = useState<PlanOptions>({ stops: 10, region: "world", budget: "arena" });
+  const [opts, setOpts] = useState<PlanOptions>({ stops: 10, region: "world", budget: "auto" });
   const [routeMode, setRouteMode] = useState<RouteMode>("shortest");
   const [startIso, setStartIso] = useState("");
   const [query, setQuery] = useState(artist);
@@ -271,7 +272,7 @@ export default function PlanApp() {
 
         <aside className="rail rail-left" aria-label="Plan inputs">
           <section className="block">
-            <label className="field-label" htmlFor="plan-search">Artist, comedian or band</label>
+            <label className="field-label" htmlFor="plan-search">Artist, comedian, team or podcast</label>
             <ArtistSearch
               value={query}
               onChange={setQuery}
@@ -422,6 +423,7 @@ export default function PlanApp() {
               onStep={step}
               onRemove={() => remove(selectedStop.id)}
               about={about}
+              kind={profile?.kind ?? "act"}
               rank={[...markets].sort((a, b) => b.demand - a.demand).findIndex((m) => m.id === selectedStop.id) + 1}
               scanned={markets.length}
             />
@@ -517,10 +519,10 @@ function Kpi({ label, value, small }: { label: string; value: string | null; sma
 }
 
 function Detail({
-  stop, row, index, total, tab, setTab, onBack, onStep, onRemove, about, rank, scanned,
+  stop, row, index, total, tab, setTab, onBack, onStep, onRemove, about, kind, rank, scanned,
 }: {
   stop: Stop; row: Row; index: number; total: number; tab: Tab; setTab: (t: Tab) => void; onBack: () => void; onStep: (d: 1 | -1) => void; onRemove: () => void;
-  about: About | null; rank: number; scanned: number;
+  about: About | null; kind: SubjectKind; rank: number; scanned: number;
 }) {
   const strength = fanStrength(rank, scanned);
   const focus = (stop.focus ?? []).map((t) => about?.knownFor?.find((k) => k.title.toLowerCase() === t.toLowerCase()) ?? { title: t, kind: "other" });
@@ -578,7 +580,7 @@ function Detail({
               </div>
             )}
             <div className="sec">
-              <h3>Best opener</h3>
+              <h3>{SUPPORT_ROLE[kind]}</h3>
               <ul><li><span>{stop.opener.name}</span><span>{stop.opener.overlap}% overlap</span></li></ul>
               <div className="bar"><i style={{ width: `${stop.opener.overlap}%` }} /></div>
             </div>
@@ -774,3 +776,4 @@ function AboutPanel({ about }: { about: About | null }) {
     </div>
   );
 }
+

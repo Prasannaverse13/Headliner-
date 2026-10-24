@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { SUGGESTIONS } from "@/lib/demo";
+import { SUGGESTION_GROUPS } from "@/lib/demo";
 import ArtistSearch from "./ArtistSearch";
 
 export default function SearchBar() {
@@ -16,13 +16,17 @@ export default function SearchBar() {
 
   return (
     <div className="search">
-      <ArtistSearch value={value} onChange={setValue} onSubmit={go} />
-      <div className="chips">
-        <span>Try</span>
-        {SUGGESTIONS.map((s) => (
-          <button key={s} type="button" className="pill" onClick={() => go(s)}>
-            {s}
-          </button>
+      <ArtistSearch value={value} onChange={setValue} onSubmit={go} placeholder="Who or what is going on tour?" />
+      <div className="chip-groups">
+        {SUGGESTION_GROUPS.map((g) => (
+          <div key={g.label} className="chips">
+            <span className="chip-label">{g.label}</span>
+            {g.items.map((s) => (
+              <button key={s} type="button" className="pill" onClick={() => go(s)}>
+                {s}
+              </button>
+            ))}
+          </div>
         ))}
       </div>
     </div>

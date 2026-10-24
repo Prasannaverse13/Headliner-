@@ -1,7 +1,7 @@
-﻿import { WORLD_CITIES, cityId, type WorldCity } from "./cities";
+import { WORLD_CITIES, cityId, type WorldCity } from "./cities";
 import { llmJson } from "./llm";
 import { TAGS, cityFit, findSubject, heatCells, placesByTag, related, venuesNear, type QlooEntity, type Subject } from "./qloo";
-import type { About, KnownFor, Market, PlanEvent, PlanOptions, Stop } from "./types";
+import { SUPPORT_ROLE, type About, type KnownFor, type Market, type PlanEvent, type PlanOptions, type Stop, type SubjectKind } from "./types";
 
 const pct = (n: number | undefined) => Math.round((n ?? 0) * 100);
 const VENUES = { club: "Club, 800 cap", theatre: "Theatre, 3,000 cap", arena: "Arena, 15,000 cap" } as const;
@@ -30,7 +30,8 @@ type Enrichment = {
 };
 
 const SYSTEM = `You help tour promoters. You get real taste data from Qloo for one act and one city.
-Choose: one opener from "openers" (keep "defaultOpener" unless another is clearly a better fit for the city),
+Choose: one support slot from "openers" (the act's opener, or for a sports team a friendly opponent, for a podcast a guest show,
+for a brand a co-headline partner; see "supportRole"). Keep "defaultOpener" unless another is clearly a better fit for the city,
 three sponsors from "brands" with a short reason each (max 12 words) tied to that city, one short ad line
 (max 25 words, mention the city and the act, no hashtags) and a one or two sentence "why" that uses the supplied
 local places and taste tags. Also choose "focus": two or three titles from "knownFor" (copy them exactly) that fit
@@ -45,13 +46,29 @@ type Ctx = {
   openers: QlooEntity[];
   brands: QlooEntity[];
   venue: string;
-  budget: PlanOptions["budget"];
+  budget: Size;
   /** Filled in once the model has listed what the act is known for. */
   knownFor: KnownFor[];
 };
 
-async function loadCtx(subject: Subject, budget: PlanOptions["budget"]): Promise<Ctx> {
-  const [openers, brands] = await Promise.all([related(subject.id, subject.type, 10), related(subject.id, "urn:entity:brand", 10)]);
+type Size = "club" | "theatre" | "arena";
+
+/** Pick a show size when the user left it on Auto. */
+function resolveBudget(b: PlanOptions["budget"], subject: Subject): Size {
+  if (b !== "auto") return b;
+  if (subject.kind === "podcast") return "theatre";
+  if (subject.kind === "team") return "arena";
+  if (subject.type === "urn:entity:person") return "theatre";
+  return subject.popularity > 0.9 ? "arena" : "theatre";
+}
+
+async function loadCtx(subject: Subject, requested: PlanOptions["budget"]): Promise<Ctx> {
+  const budget = resolveBudget(requested, subject);
+  const notSelf = (list: QlooEntity[]) => list.filter((e) => e.entity_id !== subject.id);
+  const [openers, brands] = await Promise.all([
+    related(subject.id, subject.type, 11).then(notSelf),
+    related(subject.id, "urn:entity:brand", 11).then(notSelf),
+  ]);
   const tags = [...subject.tags]
     .sort((a, b) => Number(/genre/.test(b.type ?? "")) - Number(/genre/.test(a.type ?? "")))
     .map((t) => t.name)
@@ -60,9 +77,9 @@ async function loadCtx(subject: Subject, budget: PlanOptions["budget"]): Promise
 }
 
 
-const KNOWN_SYSTEM = `You are a music and entertainment researcher. Given an act, list up to 6 works that made it famous:
-songs or albums for musicians, specials, shows or films for comedians and actors. Only include works you are sure exist
-and that belong to this act. If unsure, return fewer. "kind" is one of: song, album, show, special, film, other.
+const KNOWN_SYSTEM = `You are an entertainment and sports researcher. Given an act, team, podcast or brand, list up to 6 things that made it famous:
+songs or albums for musicians; specials, shows or films for comedians and actors; championships, iconic seasons or stadium moments for sports teams;
+famous episodes or guests for podcasts. Only include things you are sure exist and that belong to it. If unsure, return fewer. "kind" is one of: song, album, show, special, film, title, season, episode, other.
 "note" is at most 8 words on why it mattered. "year" is the release year as text. Return JSON: {"items":[{"title","kind","year","note"}]}.`;
 
 const knownCache = new Map<string, Promise<KnownFor[]>>();
@@ -100,8 +117,8 @@ async function loadAbout(ctx: Ctx): Promise<About> {
   };
 }
 /** Venues for the chosen show size. If the city has none, fall back to the nearest other sizes. */
-async function venuesInSize(subjectId: string, c: WorldCity, budget: PlanOptions["budget"]) {
-  const order: PlanOptions["budget"][] = { club: ["club", "theatre", "arena"], theatre: ["theatre", "club", "arena"], arena: ["arena", "theatre", "club"] }[budget] as PlanOptions["budget"][];
+async function venuesInSize(subjectId: string, c: WorldCity, budget: Size) {
+  const order: Size[] = { club: ["club", "theatre", "arena"], theatre: ["theatre", "club", "arena"], arena: ["arena", "theatre", "club"] }[budget] as Size[];
   for (const b of order) {
     const v = await venuesNear(subjectId, c.lat, c.lng, b).catch(() => []);
     if (v.length) return v;
@@ -156,6 +173,7 @@ async function enrichStop(ctx: Ctx, stop: Stop, places: string[]): Promise<{ id:
       act: subject.name,
       tasteTags: ctx.tags,
       openers: openers.slice(0, 6).map((o) => ({ name: o.name, affinity: pct(o.query?.affinity) })),
+      supportRole: SUPPORT_ROLE[subject.kind],
       defaultOpener: stop.opener.name,
       brands: brands.map((b) => ({ name: b.name, affinity: pct(b.query?.affinity) })),
       city: stop.city,
@@ -190,6 +208,9 @@ async function enrichStop(ctx: Ctx, stop: Stop, places: string[]): Promise<{ id:
         })
         .filter((v): v is typeof v & { concerts: "yes" | "unsure" } => v.concerts !== "no")
         .sort((a, b) => Number(b.concerts === "yes") - Number(a.concerts === "yes") || b.fit - a.fit);
+      // When at least two venues are confirmed concert venues, drop the unverified ones (often pubs or restaurants).
+      const confirmed = checked.filter((v) => v.concerts === "yes");
+      if (confirmed.length >= 2) checked.splice(0, checked.length, ...confirmed);
       // If the model rejected every venue, keep Qloo's list rather than showing none.
       if (checked.length) patch.venues = checked;
     }
@@ -239,7 +260,7 @@ export async function* runPlan(artist: string, opts: PlanOptions): AsyncGenerato
 
   // Home market: ask the model for the nearest city while Qloo resolves the name. A miss falls back to a default.
   const homePromise = llmJson<{ city: string; lat: number; lng: number }>(
-    "Return JSON {city, lat, lng} for the home city or main base of the given act. Use real coordinates.",
+    "Return JSON {city, lat, lng} for the home city or main base of the given act, team, podcast or brand. Use real coordinates.",
     { act: artist },
     15000,
   ).catch(() => null);
@@ -258,6 +279,7 @@ export async function* runPlan(artist: string, opts: PlanOptions): AsyncGenerato
     plan: {
       artist: subject.name,
       tags: ctx.tags,
+      kind: subject.kind,
       source: "live",
       home: home && Number.isFinite(home.lat) && Number.isFinite(home.lng) ? home : { city: "Los Angeles", lat: 34.05, lng: -118.24 },
     },
@@ -334,6 +356,7 @@ export async function addStop(artist: string, city: string, demand: number, budg
   const { patch } = await enrichStop(ctx, stop, fit.places);
   return { ...stop, ...patch };
 }
+
 
 
 
