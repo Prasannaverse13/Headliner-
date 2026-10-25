@@ -6,7 +6,7 @@ Built for the [Qloo Agentic Hackathon](https://qloo.devpost.com/?ref_feature=cha
 
 | | |
 |---|---|
-| Live demo | _Add the Vercel URL here after deploying_ |
+| Live demo | [Headliner](https://headliner-zeta.vercel.app/) |
 | Code | This repository (MIT license) |
 | Taste data | [Qloo API](https://docs.qloo.com/reference/qloo-llm-hackathon-developer-guide) (hackathon environment) |
 | AI model | OpenAI API, model set by `OPENAI_MODEL` (the "luna" model) |
